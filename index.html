@@ -1,0 +1,772 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="theme-color" content="#170f24">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Afterglow">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="apple-touch-icon" href="apple-touch-icon.png">
+<link rel="icon" type="image/png" href="icon-192.png">
+<title>Afterglow · sunset forecast</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=DM+Serif+Display&family=Manrope:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
+<!-- VOICE: calm, observational, precise — a field almanac for sky-watchers.
+   IDEA: an observer's dusk log: the verdict, then the light's path to you, drawn.
+   PICTURE: a sky painted from the forecast itself, plus a cross-section of the sun's ray.
+   COLOUR and TYPE: dusk violet ground, tangerine + rose glow, cool cloud blue; DM Serif numerals, Manrope text.
+   LAYOUT: verdict + painted sky first; factors; light path; timing; models; map; nowcast links; method. -->
+<style>
+:root{color-scheme:light dark;
+--bg:light-dark(#fbf3ec,#170f24);--bg2:light-dark(#f3e4d8,#21162f);--card:light-dark(#fffaf6,#251a35);
+--ink:light-dark(#2a1830,#f6ecf1);--soft:light-dark(#6e5866,#bfaec4);--line:light-dark(#e6d3c6,#3a2b4a);
+--glow:#ff7a45;--rose:#e2557c;--gold:#ffb347;--cloud:light-dark(#7d93b8,#8ea6cf);--low:light-dark(#5d6070,#8a8d9c);--hi:light-dark(#a9bde0,#d8e2f5);
+--good:#ff7a45;--bad:light-dark(#8b7f8f,#6c6177)}
+:root[data-theme=light]{color-scheme:light}:root[data-theme=dark]{color-scheme:dark}
+*{box-sizing:border-box;min-width:0}
+body{margin:0;background:var(--bg);color:var(--ink);font:16px/1.55 Manrope,system-ui,sans-serif;overflow-x:clip}
+a{color:var(--glow)}
+h1,h2,h3{margin:0;line-height:1.1;text-wrap:balance}
+h2{font:400 clamp(26px,3vw,34px)/1.1 "DM Serif Display",Georgia,serif;margin-bottom:6px}
+.sub{color:var(--soft);margin:0 0 18px;max-width:68ch}
+.wrap{max-width:1240px;margin:0 auto}
+.band{padding:clamp(24px,4vw,56px) max(4vw,16px)}
+.band.alt{background:var(--bg2)}
+
+.top{display:flex;flex-wrap:wrap;gap:12px 20px;align-items:center;justify-content:space-between;padding:calc(14px + env(safe-area-inset-top)) max(4vw,16px,env(safe-area-inset-right)) 14px max(4vw,16px,env(safe-area-inset-left));border-bottom:1px solid var(--line)}
+.brand{font:400 26px/1 "DM Serif Display",serif;display:flex;align-items:center;gap:10px}
+.brand svg{width:30px;height:30px}
+.ctrl{display:flex;flex-wrap:wrap;gap:10px;align-items:center}
+.search{position:relative}
+.search input{font:inherit;font-size:16px;height:44px;width:min(320px,80vw);padding:0 14px;border-radius:12px;border:1px solid var(--line);background:var(--card);color:var(--ink)}
+.search input:focus,button:focus-visible,select:focus-visible,input[type=range]:focus-visible{outline:2px solid var(--glow);outline-offset:2px}
+.results{position:absolute;top:48px;left:0;right:0;z-index:1000;background:var(--card);border:1px solid var(--line);border-radius:12px;overflow:hidden;box-shadow:0 12px 30px #0003}
+.results button{display:block;width:100%;text-align:left;border:0;border-radius:0;background:none;padding:10px 14px;min-height:44px}
+.results button:hover{background:var(--bg2)}
+button,select{font:inherit;font-size:15px;min-height:44px;padding:0 14px;border-radius:12px;border:1px solid var(--line);background:var(--card);color:var(--ink);cursor:pointer}
+button.on{background:var(--ink);color:var(--bg);border-color:var(--ink)}
+.seg{display:inline-flex;border:1px solid var(--line);border-radius:12px;overflow:hidden}
+.seg button{border:0;border-radius:0}
+.days{display:flex;flex-wrap:wrap;gap:8px}
+.status{font-size:13px;color:var(--soft)}
+
+.hero{display:grid;grid-template-columns:minmax(0,5fr) minmax(0,6fr);gap:clamp(20px,3vw,40px);align-items:stretch}
+.verdict .place{color:var(--soft);font-weight:600}
+.placeRow{display:flex;flex-wrap:wrap;gap:8px 10px;align-items:center}
+button.mini{min-height:36px;font-size:14px;padding:0 12px;border-radius:999px}
+.days button b{margin-left:8px;padding:1px 8px;border-radius:999px;color:#fff;font-size:13px}
+.favs{display:flex;flex-wrap:wrap;gap:8px;margin-bottom:8px}.favs:empty{display:none}
+.favs button{min-height:36px;font-size:14px;border-radius:999px}
+.rate{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:12px 14px;margin-top:6px}
+.rate p{margin:0 0 8px;font-weight:700}.rate div{display:flex;flex-wrap:wrap;gap:6px}
+.rate button{min-height:40px;font-size:14px}
+.score{display:flex;align-items:flex-end;gap:16px;margin:8px 0 4px}
+.score b{font:400 clamp(84px,12vw,148px)/.85 "DM Serif Display",serif;color:var(--glow)}
+.score span{font:400 clamp(28px,3.4vw,44px)/1.05 "DM Serif Display",serif;padding-bottom:8px}
+.range{color:var(--soft);font-size:14px}
+.facts{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px;margin:18px 0}
+.fact{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:12px 14px}
+.fact small{display:block;color:var(--soft);font-size:13px}
+.fact strong{font-size:20px;white-space:nowrap}
+.story{font-size:17px;max-width:62ch}
+.sky{border-radius:22px;overflow:hidden;position:relative;min-height:340px;background:#222}
+.sky svg{position:absolute;inset:0;width:100%;height:100%}
+.skycap{position:absolute;left:14px;bottom:12px;font-size:13px;color:#fff;opacity:.85;text-shadow:0 1px 3px #000a}
+
+.meters{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:14px}
+.meter{background:var(--card);border:1px solid var(--line);border-radius:16px;padding:16px}
+.meter h3{font-size:15px;font-weight:700}
+.meter .v{font:400 38px/1 "DM Serif Display",serif;margin:8px 0}
+.bar{height:10px;border-radius:6px;background:var(--line);overflow:hidden}
+.bar i{display:block;height:100%;background:linear-gradient(90deg,var(--rose),var(--glow),var(--gold));border-radius:6px}
+.meter p{margin:10px 0 0;font-size:14px;color:var(--soft)}
+
+.panel{background:var(--card);border:1px solid var(--line);border-radius:18px;padding:clamp(12px,2vw,20px)}
+.fig{position:relative;min-height:380px}.fig>svg{position:absolute;inset:0;width:100%;height:100%}
+.fig.short{min-height:300px}
+.figbar{display:flex;flex-wrap:wrap;gap:12px 18px;align-items:center;margin-bottom:12px}
+.figbar label{font-size:14px;color:var(--soft);display:flex;align-items:center;gap:10px}
+input[type=range]{width:min(320px,70vw);accent-color:var(--glow);height:44px}
+.tlabel{font-weight:700;white-space:nowrap;min-width:12ch}
+.legend{display:flex;flex-wrap:wrap;gap:8px 16px;font-size:13px;color:var(--soft);margin-top:10px}
+.legend i{display:inline-block;width:14px;height:10px;border-radius:3px;margin-right:6px;vertical-align:middle}
+.two{display:grid;grid-template-columns:minmax(0,3fr) minmax(0,2fr);gap:20px}
+
+.strip{display:grid;gap:4px}
+.srow{display:grid;grid-template-columns:44px minmax(0,1fr);gap:8px;align-items:center;font-size:13px;color:var(--soft)}
+.cells{display:flex;gap:2px;height:26px}
+.cells i{flex:1;border-radius:3px}
+.saxis{display:flex;justify-content:space-between;font-size:12px;color:var(--soft);margin-left:52px}
+
+.scroll{overflow-x:auto}
+table{width:100%;border-collapse:collapse;font-size:15px}
+th,td{padding:10px 10px;border-bottom:1px solid var(--line);text-align:right;white-space:nowrap}
+th{font-size:13px;color:var(--soft);font-weight:600}
+th:first-child,td:first-child{text-align:left}
+td .pill{display:inline-block;min-width:44px;text-align:center;padding:2px 8px;border-radius:999px;font-weight:700;color:#fff}
+tr.off td{color:var(--soft)}
+.age{color:var(--soft);font-size:13px}
+
+#map{height:420px;border-radius:14px;overflow:hidden;background:var(--bg2)}
+
+.links{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px}
+.links a{display:block;background:var(--card);border:1px solid var(--line);border-radius:14px;padding:14px 16px;text-decoration:none;color:var(--ink)}
+.links a b{display:block;color:var(--glow)}
+.links a span{font-size:14px;color:var(--soft)}
+details{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:14px 18px;margin-top:12px}
+summary{cursor:pointer;font-weight:700}
+.method p,.method li{max-width:75ch}
+footer{padding:24px max(4vw,16px) calc(24px + env(safe-area-inset-bottom));color:var(--soft);font-size:13px;border-top:1px solid var(--line)}
+.err{background:#e2557c22;border:1px solid var(--rose);border-radius:12px;padding:12px 16px;margin-bottom:16px}
+.loading{opacity:.55;transition:opacity .3s}
+@media(max-width:900px){.hero,.two{grid-template-columns:minmax(0,1fr)}.meters{grid-template-columns:repeat(2,minmax(0,1fr))}.links{grid-template-columns:repeat(2,minmax(0,1fr))}}
+@media(max-width:600px){.meters,.links{grid-template-columns:minmax(0,1fr)}.facts{grid-template-columns:minmax(0,1fr) minmax(0,1fr)}table{font-size:13px}.sky{min-height:260px}}
+@media(prefers-reduced-motion:no-preference){.sun-pulse{animation:pulse 6s ease-in-out infinite}@keyframes pulse{50%{opacity:.75}}}
+</style>
+</head>
+<body>
+<header class="top">
+  <div class="brand"><svg viewBox="0 0 32 32" aria-hidden="true"><defs><linearGradient id="lg" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#e2557c"/><stop offset="1" stop-color="#ffb347"/></linearGradient></defs><circle cx="16" cy="20" r="9" fill="url(#lg)"/><rect x="2" y="20" width="28" height="10" fill="var(--bg)"/><path d="M3 22h26M7 26h18" stroke="var(--soft)" stroke-width="2" stroke-linecap="round"/></svg>Afterglow</div>
+  <div class="ctrl">
+    <div class="search"><input id="q" type="search" placeholder="Search a place…" autocomplete="off" aria-label="Search location"><div class="results" id="res" hidden></div></div>
+    <button id="geo" title="Use my location">◎ My location</button>
+    <div class="seg" role="group" aria-label="Event"><button id="mSet" class="on">Sunset</button><button id="mRise">Sunrise</button></div>
+  </div>
+</header>
+
+<section class="band" style="padding-bottom:0">
+  <div class="wrap">
+    <div id="err"></div>
+    <div class="figbar" style="justify-content:space-between">
+      <div><div class="favs" id="favs"></div><div class="days" id="days"></div></div>
+      <div class="status"><span id="stat">Loading live model data…</span> <button id="refresh" style="margin-left:8px">↻ Refresh</button></div>
+    </div>
+  </div>
+</section>
+
+<main id="main">
+<section class="band">
+  <div class="wrap hero">
+    <div class="verdict">
+      <div class="placeRow"><span class="place" id="place">Zürich</span><button class="mini" id="fav">☆ Save place</button><button class="mini" id="share">Share</button></div>
+      <div class="score"><b id="score">–</b><span id="word">Fetching…</span></div>
+      <div class="range" id="range"></div>
+      <div class="facts">
+        <div class="fact"><small id="evLabel">Sunset</small><strong id="evTime">–</strong></div>
+        <div class="fact"><small>Best moment</small><strong id="best">–</strong></div>
+        <div class="fact"><small>Look toward</small><strong id="az">–</strong></div>
+        <div class="fact"><small id="agLabel">Afterglow lasts</small><strong id="ag">–</strong></div>
+        <div class="fact"><small>Golden hour</small><strong id="golden">–</strong></div>
+        <div class="fact"><small>Blue hour</small><strong id="blue">–</strong></div>
+      </div>
+      <p class="story" id="story"></p>
+      <div id="rate"></div>
+    </div>
+    <div class="sky" id="sky"><svg id="skysvg" aria-label="Forecast sky painting"></svg><div class="skycap" id="skycap">Sky painted from the model consensus at the event time</div></div>
+  </div>
+</section>
+
+<section class="band alt">
+  <div class="wrap">
+    <h2>What drives tonight's score</h2>
+    <p class="sub">Four ingredients, averaged across the high‑resolution models at the best moment. All four need to be decent for a memorable sky.</p>
+    <div class="meters" id="meters"></div>
+  </div>
+</section>
+
+<section class="band">
+  <div class="wrap">
+    <h2>The light's path to your sky</h2>
+    <p class="sub" id="pathSub">A vertical slice from your location toward the sun. Clouds over you only glow if the sun's rays reach them, and those rays skim low over the land hundreds of kilometres away. Drag the time to watch the rays sink.</p>
+    <div class="panel">
+      <div class="figbar">
+        <label>Model <select id="msel"></select></label>
+        <label>Time <input id="tsl" type="range" min="0" max="20" step="1" value="8"><span class="tlabel" id="tlab"></span></label>
+      </div>
+      <div class="fig" id="xfig"><svg id="xsvg"></svg></div>
+      <div class="legend"><span><i style="background:var(--low)"></i>Low cloud 0–2.5 km</span><span><i style="background:var(--cloud)"></i>Mid cloud 2.5–6 km</span><span><i style="background:var(--hi)"></i>High cloud 6–11 km</span><span><i style="background:var(--glow)"></i>Sun ray to high cloud overhead</span><span><i style="background:var(--rose)"></i>Ray to mid cloud overhead</span></div>
+    </div>
+  </div>
+</section>
+
+<section class="band alt">
+  <div class="wrap two">
+    <div>
+      <h2>When to look</h2>
+      <p class="sub">Predicted glow minute by minute. Each thin line is one model; the thick line is the weighted consensus.</p>
+      <div class="panel"><div class="fig short" id="gfig"><svg id="gsvg"></svg></div><div class="legend" id="glegend"></div></div>
+    </div>
+    <div>
+      <h2>Clouds over you</h2>
+      <p class="sub" id="stripSub">Cover above your location through the afternoon, from the selected model.</p>
+      <div class="panel"><div class="strip" id="strip"></div></div>
+    </div>
+  </div>
+</section>
+
+<section class="band">
+  <div class="wrap">
+    <h2>Model by model</h2>
+    <p class="sub">Every model run is fetched live. Newer runs and finer grids get more weight; models that do not cover your location are greyed out.</p>
+    <div class="panel scroll"><table id="mtab"></table></div>
+  </div>
+</section>
+
+<section class="band alt">
+  <div class="wrap">
+    <h2>Sight line on the map</h2>
+    <p class="sub">The sampled points along the sun's direction, coloured by how much low and mid cloud sits in the way at the event time (selected model).</p>
+    <div id="map"></div>
+  </div>
+</section>
+
+<section class="band alt" id="logSec" hidden>
+  <div class="wrap">
+    <h2>Your sunset log</h2>
+    <p class="sub" id="logSub">Your own ratings next to what was forecast, so you can learn how far to trust it where you watch. Stored only in this browser.</p>
+    <div class="panel scroll"><table id="logTab"></table></div>
+  </div>
+</section>
+
+<section class="band">
+  <div class="wrap">
+    <h2>Check reality before you go</h2>
+    <p class="sub">Models are an hour or more old by the time they publish. In the last hour, satellite and webcams beat any forecast — especially for fog and low stratus.</p>
+    <div class="links" id="links"></div>
+    <details class="method"><summary>How the score is calculated</summary>
+      <p>For each model and each 2½ minutes from 20 minutes before to 30 minutes after the event, the page computes the sun's true elevation at your location and traces a ray to two targets overhead: high cloud at 8.5 km and mid cloud at 4.5 km. Along the way it samples cloud cover at 12 points out to 450 km toward the sun.</p>
+      <ul>
+        <li>The same is done for the clouds you actually look at 25 and 50 km toward the sun, not only those straight overhead, as ray-based forecasters like Sunsethue do.</li>
+        <li>Wherever the ray passes through a layer, light is dimmed: low cloud blocks almost fully, mid cloud strongly, high cloud only slightly. If the ray drops below the terrain, the target is in Earth's shadow.</li>
+        <li>The glow is the overhead canvas (how much high and mid cloud is there to catch the light, peaking around 50% each) × the light that gets through × how much of it you can see past low cloud at your spot. A solid overcast sheet is penalised.</li>
+        <li>Colour is weighted towards the sun sitting below about 2° and peaks once it is at or under the horizon, when the light reaching the clouds turns red. Low-level aerosol (CAMS) and near‑ground humidity can only lower the result: the NOAA Storm Prediction Center's sunset science notes that abundant haze and pollution subdue colours rather than enhance them.</li>
+        <li>A separate ray from your eye toward the sun about 8 minutes before it sets checks whether the sun disc itself is hidden by low cloud or hills.</li>
+        <li>Golden hour is the sun between 6° above and 4° below the horizon; blue hour between 4° and 6° below.</li>
+        <li>The score is the peak glow, 0–100. Model scores are combined with weights for resolution and model type; the range shows their disagreement.</li>
+      </ul>
+      <p>It is a heuristic, not a physical radiative model: cloud thickness, multiple layers in one grid cell, and haze colour are not modelled.</p>
+    </details>
+  </div>
+</section>
+</main>
+<footer><div class="wrap">Data: <a href="https://open-meteo.com/">Open-Meteo</a> (MeteoSwiss ICON-CH1/CH2, DWD ICON-D2/ICON-EU, Météo-France AROME HD, ECMWF IFS; CAMS aerosol). Map tiles © OpenStreetMap contributors, © CARTO. Refreshes automatically every 15 minutes while open.</div></footer>
+
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script>
+{
+const MODELS=[
+ {id:'meteoswiss_icon_ch1',name:'ICON-CH1',by:'MeteoSwiss',res:'1 km',meta:'meteoswiss_icon_ch1',w:1.4},
+ {id:'meteoswiss_icon_ch2',name:'ICON-CH2',by:'MeteoSwiss',res:'2 km',meta:'meteoswiss_icon_ch2',w:1.0},
+ {id:'icon_d2',name:'ICON-D2',by:'DWD',res:'2 km',meta:'dwd_icon_d2_15min',w:1.1},
+ {id:'meteofrance_arome_france_hd',name:'AROME HD',by:'Météo-France',res:'1.5 km',meta:'meteofrance_arome_france_hd_15min',w:1.1},
+ {id:'icon_eu',name:'ICON-EU',by:'DWD',res:'7 km',meta:'dwd_icon_eu',w:0.7},
+ {id:'ecmwf_ifs',name:'ECMWF IFS',by:'ECMWF',res:'9 km',meta:'ecmwf_ifs',w:0.8},
+ {id:'best_match',name:'Best match',by:'Open-Meteo',res:'auto',meta:null,w:0.5,fallback:true}];
+const DIST=[0,25,50,75,100,150,200,250,300,350,400,450];
+const R=6371, LAYERS={L:[0.3,2.5,.95],M:[2.5,6,.8],H:[6,11,.06]};
+const STEPS=21, STEP_MS=150000, K0=8;
+const TARGETS=[[0,.45],[1,.35],[2,.2]]; // clouds overhead, 25 km and 50 km toward the sun // -20 .. +30 min
+const $=id=>document.getElementById(id);
+const rad=x=>x*Math.PI/180, deg=x=>x*180/Math.PI, clamp=(x,a=0,b=1)=>Math.max(a,Math.min(b,x));
+const store={get(k,d){try{const v=localStorage.getItem(k);return v?JSON.parse(v):d}catch(e){return d}},set(k,v){try{localStorage.setItem(k,JSON.stringify(v))}catch(e){}}};
+
+let loc=store.get('ag-loc',{name:'Zürich',sub:'Switzerland',lat:47.3769,lon:8.5417});
+let mode=store.get('ag-mode','set');
+let dayIdx=null, selModel=null, tIdx=K0, state=null, map=null, mapLayer=null, timer=null;
+
+// ---------- sun ----------
+function sunPos(ms,lat,lon){
+  const d=ms/86400000+2440587.5-2451545.0;
+  const g=rad(357.529+0.98560028*d), q=280.459+0.98564736*d;
+  const L=rad(q+1.915*Math.sin(g)+0.020*Math.sin(2*g)), e=rad(23.439-0.00000036*d);
+  const ra=Math.atan2(Math.cos(e)*Math.sin(L),Math.cos(L)), dec=Math.asin(Math.sin(e)*Math.sin(L));
+  const gmst=((18.697374558+24.06570982441908*d)%24+24)%24;
+  const H=rad(gmst*15+lon)-ra, f=rad(lat);
+  const el=Math.asin(Math.sin(f)*Math.sin(dec)+Math.cos(f)*Math.cos(dec)*Math.cos(H));
+  const az=(deg(Math.atan2(Math.sin(H),Math.cos(H)*Math.sin(f)-Math.tan(dec)*Math.cos(f)))+180+360)%360;
+  return {el:deg(el),az};
+}
+function findEvent(y,m,d,lat,lon,kind){
+  const noon=Date.UTC(y,m-1,d,12)-lon/15*3600000;
+  let t=kind==='set'?noon:noon-12*3600000;
+  const end=t+12*3600000;
+  let prev=sunPos(t,lat,lon).el;
+  for(t+=60000;t<=end;t+=60000){
+    const el=sunPos(t,lat,lon).el;
+    if(kind==='set'&&prev>=-0.833&&el<-0.833) return t;
+    if(kind==='rise'&&prev<=-0.833&&el>-0.833) return t;
+    prev=el;
+  }
+  return null;
+}
+function dest(lat,lon,brg,km){
+  const d=km/R,f1=rad(lat),l1=rad(lon),b=rad(brg);
+  const f2=Math.asin(Math.sin(f1)*Math.cos(d)+Math.cos(f1)*Math.sin(d)*Math.cos(b));
+  const l2=l1+Math.atan2(Math.sin(b)*Math.sin(d)*Math.cos(f1),Math.cos(d)-Math.sin(f1)*Math.sin(f2));
+  return [deg(f2),deg(l2)];
+}
+const compass=a=>['N','NNE','NE','ENE','E','ESE','SE','SSE','S','SSW','SW','WSW','W','WNW','NW','NNW'][Math.round(a/22.5)%16];
+
+// ---------- formatting ----------
+let TZ='Europe/Zurich';
+const fmtT=ms=>new Intl.DateTimeFormat('en-GB',{timeZone:TZ,hour:'2-digit',minute:'2-digit'}).format(ms);
+const fmtD=ms=>new Intl.DateTimeFormat('en-GB',{timeZone:TZ,weekday:'short',day:'numeric',month:'short'}).format(ms);
+const fmtLocal=ms=>new Intl.DateTimeFormat('en-GB',{hour:'2-digit',minute:'2-digit'}).format(ms);
+function ago(ms){const m=Math.round((Date.now()-ms)/60000);if(m<60)return m+' min';const h=Math.floor(m/60);return h+' h '+String(m%60).padStart(2,'0')+' min'}
+const parseLocal=(s,off)=>{const [a,b]=s.split('T');const [y,mo,d]=a.split('-').map(Number);const [h,mi]=(b||'00:00').split(':').map(Number);return Date.UTC(y,mo-1,d,h,mi)-off*1000};
+const words=s=>s>=80?'Spectacular':s>=60?'Good':s>=40?'Decent':s>=20?'Muted':'Grey';
+const scoreCol=s=>s>=80?'#e2557c':s>=60?'#ff7a45':s>=40?'#f0a23b':s>=20?'#a58f7a':'#7d7484';
+
+// ---------- data ----------
+const sleep=ms=>new Promise(r=>setTimeout(r,ms));
+async function getJSON(u,tries=3){
+  for(let i=0;;i++){
+    try{
+      let r;try{r=await fetch(u)}catch(e){throw new Error('request blocked or offline: '+e.message)}
+      if(!r.ok&&r.status!==400)throw new Error('HTTP '+r.status+(r.status===429?' (rate limit)':''));
+      const j=await r.json();
+      if(j.error){const e=new Error(j.reason||'API error');e.fatal=true;throw e}
+      return j;
+    }catch(e){if(e.fatal||i>=tries-1)throw e;await sleep(1200*(i+1)*(i+1))}
+  }
+}
+async function pool(items,n,fn){const out=new Array(items.length);let i=0;await Promise.all(Array.from({length:n},async()=>{while(i<items.length){const k=i++;out[k]=await fn(items[k])}}));return out}
+const memCache={};
+const cacheKey=m=>`ag-c|${loc.lat.toFixed(3)}|${loc.lon.toFixed(3)}|${mode}|${m.id}`;
+function cacheGet(m){const k=cacheKey(m);let c=memCache[k];if(!c){try{const v=localStorage.getItem(k);if(v)c=JSON.parse(v)}catch(e){}}return c&&Date.now()-c.t<6*3600000?c:null}
+function cachePut(m,v){const k=cacheKey(m);memCache[k]=v;try{localStorage.setItem(k,JSON.stringify(v))}catch(e){}}
+async function load(){
+  $('main').classList.add('loading');
+  $('stat').textContent='Loading live model data…';
+  $('err').innerHTML='';
+  const today=new Date();
+  const ev0=findEvent(today.getUTCFullYear(),today.getUTCMonth()+1,today.getUTCDate(),loc.lat,loc.lon,mode)||Date.now();
+  const az=sunPos(ev0,loc.lat,loc.lon).az;
+  const pts=DIST.map(d=>d===0?[loc.lat,loc.lon]:dest(loc.lat,loc.lon,az,d));
+  const lat=pts.map(p=>p[0].toFixed(4)).join(','),lon=pts.map(p=>p[1].toFixed(4)).join(',');
+  const base=`https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lon}&minutely_15=cloud_cover_low,cloud_cover_mid,cloud_cover_high&hourly=cloud_cover_low,cloud_cover_mid,cloud_cover_high,relative_humidity_2m,precipitation&daily=sunset,sunrise&timezone=auto&forecast_days=4&models=`;
+  const fetchModel=async m=>{
+    const out={m,ok:false};
+    try{
+      const [d,meta]=await Promise.all([getJSON(base+m.id),m.meta?getJSON(`https://api.open-meteo.com/data/${m.meta}/static/meta.json`,2).catch(()=>null):null]);
+      out.data=Array.isArray(d)?d:[d];
+      if(meta){out.run=meta.last_run_initialisation_time*1000;out.avail=meta.last_run_availability_time*1000}
+      out.ok=true;
+      cachePut(m,{t:Date.now(),data:out.data,run:out.run,avail:out.avail});
+    }catch(e){
+      out.error=e.message;
+      const c=e.fatal?null:cacheGet(m);
+      if(c){out.data=c.data;out.run=c.run;out.avail=c.avail;out.ok=true;out.stale=c.t}
+    }
+    return out;
+  };
+  const aqJob=getJSON(`https://air-quality-api.open-meteo.com/v1/air-quality?latitude=${loc.lat}&longitude=${loc.lon}&hourly=aerosol_optical_depth,dust&timezone=auto&forecast_days=4`).catch(()=>null);
+  const regional=MODELS.filter(m=>!m.fallback);
+  const res=await pool(regional,3,fetchModel);
+  if(res.filter(r=>r.ok).length<2)res.push(await fetchModel(MODELS.find(m=>m.fallback)));
+  const aq=await aqJob;
+  const first=res.find(r=>r.ok);
+  if(!first){
+    const why=(res[0]&&res[0].error)||'unknown error';
+    const isFile=location.protocol==='file:';
+    $('err').innerHTML=`<div class="err"><b>Could not load the model data</b> (${why}).<br>${isFile?'Your browser is blocking web requests from a page opened as a local file (Safari does this). Double-click <b>serve.command</b> in the same folder to open it at http://localhost:8765, or open this file in Chrome or Firefox.':'Check your connection, or a content blocker on api.open-meteo.com, then press Refresh.'}</div>`;
+    $('stat').textContent='Offline';$('word').textContent='No data';$('score').textContent='–';$('main').classList.remove('loading');return}
+  const d0=first.data[0];TZ=d0.timezone||'UTC';
+  const off=d0.utc_offset_seconds||0;
+  const days=d0.daily.time.map(s=>{const [y,m,d]=s.split('-').map(Number);return {s,ev:findEvent(y,m,d,loc.lat,loc.lon,mode)}});
+  res.forEach(r=>{if(r.ok)r.series=r.data.map(p=>buildSeries(p,off))});
+  state={pts,az,res,aq,off,days,fetched:Date.now(),elev:first.data.map(p=>p.elevation||0)};
+  if(dayIdx===null||dayIdx>=days.length){dayIdx=days.findIndex(x=>x.ev&&Date.now()<x.ev+30*60000);if(dayIdx<0)dayIdx=0}
+  computeAll();
+  $('main').classList.remove('loading');
+}
+function buildSeries(p,off){
+  const mt=p.minutely_15?.time?.map(s=>parseLocal(s,off))||[], ht=p.hourly.time.map(s=>parseLocal(s,off));
+  const pick=(k)=>{
+    const mv=p.minutely_15?.[k]||[], hv=p.hourly[k]||[];
+    return t=>{
+      const v=interp(mt,mv,t,15*60000);
+      return v!==null?v/100:(()=>{const h=interp(ht,hv,t,3600000);return h===null?null:h/100})();
+    };
+  };
+  return {L:pick('cloud_cover_low'),M:pick('cloud_cover_mid'),H:pick('cloud_cover_high'),
+    rh:t=>interp(ht,p.hourly.relative_humidity_2m||[],t,3600000),pr:t=>interp(ht,p.hourly.precipitation||[],t,3600000)};
+}
+function interp(ts,vs,t,step){
+  if(!ts.length||t<ts[0]||t>ts[ts.length-1])return null;
+  const i=Math.min(ts.length-2,Math.max(0,Math.floor((t-ts[0])/step)));
+  const a=vs[i],b=vs[i+1];
+  if(a==null&&b==null)return null;if(a==null)return b;if(b==null)return a;
+  const f=clamp((t-ts[i])/(ts[i+1]-ts[i]));return a+(b-a)*f;
+}
+
+// ---------- model ----------
+function rayAlt(h,e,d){return h+d*Math.tan(rad(e))+d*d/(2*R)}
+function transmission(S,h,e,t,elev,info,j0=0,margin=0.15){
+  let T=1,wf=1,wd=0;
+  for(let i=j0+1;i<DIST.length;i++){
+    const d=DIST[i]-DIST[j0],dd=DIST[i]-DIST[i-1],z=rayAlt(h,e,d);
+    if(z<elev[i]/1000+margin){if(info){info.shadow=DIST[i];info.d=wd;info.f=wf}return 0}
+    const lay=z<LAYERS.L[1]?'L':z<LAYERS.M[1]?'M':z<LAYERS.H[1]?'H':null;
+    if(!lay)continue;
+    const c=S[i][lay](t);if(c==null)continue;
+    const f=Math.pow(1-LAYERS[lay][2]*c,dd/50);
+    if(f<wf){wf=f;wd=DIST[i]}
+    T*=f;
+  }
+  if(info){info.shadow=null;info.d=wd;info.f=wf}
+  return T;
+}
+const g=c=>clamp(c/0.5);
+const sheet=c=>c>0.8?1-(c-0.8)*2:1;
+const colourF=e=>e>2?0:e>-0.5?(2-e)/2.5:1;
+function evalModel(r,ev,air){
+  const S=r.series, sgn=mode==='set'?1:-1, elev=state.elev;
+  const home=S[0];
+  if(home.H(ev)==null||home.M(ev)==null||home.L(ev)==null)return null;
+  const curve=[],parts=[];
+  for(let k=0;k<STEPS;k++){
+    const t=ev+sgn*(k-K0)*STEP_MS;
+    const e=sunPos(t,loc.lat,loc.lon).el+0.5;
+    const cL=home.L(t)??0,cM=home.M(t)??0,cH=home.H(t)??0;
+    let glow=0,cw=0,lw=0,vw=0,THo=0,TMo=0;
+    for(const [j,w] of TARGETS){
+      const P=S[j],jM=P.M(t)??0,jH=P.H(t)??0,ej=e+deg(DIST[j]/R);
+      const TH=transmission(S,8.5,ej,t,elev,null,j),TM=transmission(S,4.5,ej,t,elev,null,j);
+      if(j===0){THo=TH;TMo=TM}
+      const vis=1-0.9*Math.max(cL,j===2?0.6*(S[1].L(t)??0):0);
+      const hs=jH*(1-0.75*jM),up=1-(1-jH)*(1-jM),raw=0.7*g(hs)+0.5*g(jM);
+      const lit=raw>0?(0.7*g(hs)*TH+0.5*g(jM)*TM)/raw:TH;
+      glow+=w*vis*sheet(up)*Math.min(1,0.7*g(hs)*TH+0.5*g(jM)*TM);
+      cw+=w*Math.min(1,raw)*sheet(up);lw+=w*lit;vw+=w*vis;
+    }
+    const pr=home.pr(t)||0,wet=pr>0.2?0.6:1;
+    glow*=colourF(e)*wet*air;
+    curve.push(glow);parts.push({t,e,cL,cM,cH,TH:THo,TM:TMo,vis:vw,canvas:cw,lit:lw});
+  }
+  const pk=curve.indexOf(Math.max(...curve)),peak=curve[pk];
+  const block={};transmission(S,8.5,parts[K0].e,parts[K0].t,elev,block);
+  const ts=ev-sgn*8*60000,sinfo={};
+  const sunT=transmission(S,elev[0]/1000+0.02,sunPos(ts,loc.lat,loc.lon).el+0.5,ts,elev,sinfo,0,0);
+  const sun={T:sunT,terrain:sunT===0&&sinfo.shadow!=null,at:sinfo.shadow||sinfo.d};
+  let last=K0;for(let k=K0;k<STEPS;k++)if(curve[k]>Math.max(0.15,0.3*peak))last=k;
+  const nearB=[],farB=[];
+  for(let i=1;i<DIST.length;i++){const s=S[i];const b=Math.max(s.L(ev)??0,0.7*(s.M(ev)??0));(DIST[i]<=150?nearB:farB).push([b,DIST[i],Math.max(s.L(ev)??0,s.M(ev)??0)])}
+  const near=nearB.reduce((a,b)=>b[2]>a[2]?b:a,[0,0,0]), far=farB.reduce((a,b)=>b[2]>a[2]?b:a,[0,0,0]);
+  return {score:Math.round(100*clamp(peak)),curve,parts,pk,block,sun,after:peak>0.12?Math.max(0,(last-K0)*2.5):0,
+    home:{L:home.L(ev),M:home.M(ev),H:home.H(ev),rh:home.rh(ev),pr:home.pr(ev)},near,far};
+}
+function airFactor(ev){
+  const a=state.aq;if(!a)return {f:1,aod:null};
+  const ts=a.hourly.time.map(s=>parseLocal(s,a.utc_offset_seconds||0));
+  const aod=interp(ts,a.hourly.aerosol_optical_depth,ev,3600000);
+  if(aod==null)return {f:1,aod:null};
+  const f=aod<0.15?1:aod<0.3?0.97:aod<0.6?0.9:0.8;
+  return {f,aod};
+}
+function dayScore(i){
+  const ev=state.days[i].ev;if(!ev)return null;
+  const air=airFactor(ev).f;
+  let evs=state.res.filter(r=>r.ok&&!r.m.fallback).map(r=>[r,evalModel(r,ev,1)]).filter(x=>x[1]);
+  if(!evs.length)evs=state.res.filter(r=>r.ok).map(r=>[r,evalModel(r,ev,1)]).filter(x=>x[1]);
+  if(!evs.length)return null;
+  const rh=evs[0][1].home.rh,hum=rh!=null&&rh>93?0.9:1;
+  const W=evs.reduce((a,x)=>a+x[0].m.w,0);
+  return Math.round(evs.reduce((a,[r,e])=>a+clamp(e.score/100*air*hum)*100*r.m.w,0)/W);
+}
+function computeAll(){
+  if(!state.dayScores)state.dayScores=state.days.map((_,i)=>dayScore(i));
+  const day=state.days[dayIdx];const ev=day.ev;
+  const air=airFactor(ev);
+  state.ev=ev;state.air=air;
+  state.res.forEach(r=>{r.ev=r.ok?evalModel(r,ev,1):null});
+  let valid=state.res.filter(r=>r.ev&&!r.m.fallback);
+  if(!valid.length)valid=state.res.filter(r=>r.ev);
+  state.valid=valid;
+  const rhH=valid.length?valid[0].ev.home.rh:null;
+  const hum=rhH!=null&&rhH>93?0.9:1;
+  state.hum=hum;
+  valid.forEach(r=>{r.ev.final=Math.round(clamp(r.ev.score/100*air.f*hum)*100)});
+  const W=valid.reduce((a,r)=>a+r.m.w,0);
+  const cons=valid.length?Math.round(valid.reduce((a,r)=>a+r.ev.final*r.m.w,0)/W):null;
+  const curve=[];for(let k=0;k<STEPS;k++)curve.push(valid.length?valid.reduce((a,r)=>a+r.ev.curve[k]*r.m.w,0)/W*air.f*hum:0);
+  const avgPart=(k,f)=>valid.reduce((a,r)=>a+r.ev.parts[k][f]*r.m.w,0)/W;
+  state.cons={score:cons,curve,W,avgPart};
+  if(!selModel||!valid.find(r=>r.m.id===selModel))selModel=valid[0]?.m.id;
+  render();
+}
+
+// ---------- render ----------
+function render(){
+  const st=state,ev=st.ev,c=st.cons,valid=st.valid,sgn=mode==='set'?1:-1;
+  const evName=mode==='set'?'Sunset':'Sunrise';
+  $('days').innerHTML=st.days.map((d,i)=>{const s=st.dayScores[i];return `<button class="${i===dayIdx?'on':''}" data-i="${i}">${i===0?'Today':i===1?'Tomorrow':fmtD(d.ev||Date.now())}${s==null?'':`<b style="background:${scoreCol(s)}">${s}</b>`}</button>`}).join('');
+  renderFavs();
+  $('place').textContent=`${loc.name}${loc.sub?', '+loc.sub:''} · ${fmtD(ev)}`;
+  const newest=st.res.filter(r=>r.ok&&r.avail).sort((a,b)=>b.avail-a.avail)[0];
+  $('stat').textContent=`Fetched ${fmtLocal(st.fetched)}`+(newest?` · newest run ${newest.m.name} ${new Date(newest.run).toISOString().slice(11,13)} UTC, published ${ago(newest.avail)} ago`:'');
+  if(!valid.length){
+    $('score').textContent='–';$('word').textContent='No model data';
+    $('range').textContent='None of the models cover this day at this location yet.';
+    $('story').textContent='Try an earlier day — high-resolution models only reach 1–2 days ahead.';
+    $('meters').innerHTML='';drawCross();drawGlow();drawStrip();drawTable();drawMap();return;
+  }
+  const sc=c.score;
+  $('score').textContent=sc;$('score').style.color=scoreCol(sc);$('word').textContent=words(sc);
+  const scores=valid.map(r=>r.ev.final);
+  const failed=st.res.filter(r=>!r.ok&&!r.m.fallback).length,stale=st.res.filter(r=>r.stale).length;
+  $('range').textContent=`Consensus of ${valid.length} model${valid.length>1?'s':''} · range ${Math.min(...scores)}–${Math.max(...scores)}`+(failed?` · ${failed} failed to load, press Refresh to retry`:'')+(stale?` · ${stale} using the previous download`:'');
+  $('evLabel').textContent=evName;$('evTime').textContent=fmtT(ev);
+  const pk=c.curve.indexOf(Math.max(...c.curve));
+  const off=(pk-K0)*2.5;
+  $('best').textContent=c.curve[pk]<0.08?'—':`${fmtT(ev+sgn*(pk-K0)*STEP_MS)} (${off===0?'at '+evName.toLowerCase():(off>0?'+':'−')+Math.abs(off)+' min'})`;
+  $('az').textContent=`${compass(st.az)} · ${Math.round(st.az)}°`;
+  $('agLabel').textContent=mode==='set'?'Afterglow lasts':'Pre-dawn glow';
+  let last=K0;for(let k=K0;k<STEPS;k++)if(c.curve[k]>Math.max(0.15,0.3*c.curve[pk]))last=k;
+  $('ag').textContent=c.curve[pk]<0.12?'—':last===K0?(mode==='set'?'fades by sunset':'ends at sunrise'):`~${(last-K0)*2.5} min`;
+  $('story').textContent=storyText(valid,sc);
+  const hrs=lightHours(ev);
+  $('golden').textContent=hrs.g;$('blue').textContent=hrs.b;
+  renderRate();renderLog();
+  drawSky(pk);drawMeters(pk);
+  const msel=$('msel');msel.innerHTML=valid.map(r=>`<option value="${r.m.id}" ${r.m.id===selModel?'selected':''}>${r.m.name} (${r.m.by})</option>`).join('');
+  drawCross();drawGlow();drawStrip();drawTable();drawMap();
+}
+function findEl(from,dir,target,above){for(let i=0;i<300;i++){const t=from+dir*i*60000,el=sunPos(t,loc.lat,loc.lon).el;if(above?el>=target:el<=target)return t}return null}
+function lightHours(ev){
+  const f=(a,b)=>a&&b?`${fmtT(a)}–${fmtT(b)}`:'—';
+  if(mode==='set'){const g0=findEl(ev,-1,6,true),g1=findEl(ev,1,-4,false),b1=findEl(ev,1,-6,false);return {g:f(g0,g1),b:f(g1,b1)}}
+  const b0=findEl(ev,-1,-6,false),g0=findEl(ev,-1,-4,false),g1=findEl(ev,1,6,true);return {g:f(g0,g1),b:f(b0,g0)};
+}
+function storyText(valid,sc){
+  const W=state.cons.W,avg=f=>valid.reduce((a,r)=>a+(r.ev.home[f]??0)*r.m.w,0)/W;
+  const H=avg('H'),M=avg('M'),L=avg('L');
+  const near=valid.reduce((a,r)=>a+r.ev.near[0]*r.m.w,0)/W, far=valid.reduce((a,r)=>a+r.ev.far[2]*r.m.w,0)/W;
+  const farD=valid[0].ev.far[1], nearD=valid[0].ev.near[1];
+  const up=1-(1-H)*(1-M), out=[];
+  const p=x=>Math.round(x*100)+'%';
+  if(up<0.15)out.push(`Very little cloud overhead (high ${p(H)}, mid ${p(M)}), so expect a clean gradient rather than lit-up clouds.`);
+  else if(up>0.92)out.push(`A near-solid deck overhead (high ${p(H)}, mid ${p(M)}): it can light up as one sheet if the horizon is open, but often stays grey.`);
+  else out.push(`A good canvas overhead: about ${p(H)} high cloud and ${p(M)} mid cloud to catch the colour.`);
+  if(L>0.45)out.push(`Low cloud or fog at your spot (${p(L)}) is the main risk — get above it if you can.`);
+  const ev=mode==='set'?'sunset':'sunrise',c=state.cons;
+  const lit=c.avgPart(K0,'lit'),top=valid.reduce((a,r)=>r.m.w>a.m.w?r:a,valid[0]),bd=top.ev.block.d;
+  if(up>=0.15){
+    if(lit>0.65)out.push(`At ${ev} sunlight should reach those clouds freely (about ${p(lit)} gets through).`);
+    else out.push(`Cloud ${bd?'around '+bd+' km':'along the way'} toward the sun dims the light on its way in — only about ${p(lit)} reaches the clouds at ${ev}.`);
+  }
+  const pkv=Math.max(...c.curve);let lastK=K0;for(let k=K0;k<STEPS;k++)if(c.curve[k]>Math.max(0.15,0.3*pkv))lastK=k;
+  const mins=(lastK-K0)*2.5;
+  if(pkv>0.15)out.push(mins>=12?`The colour can linger ~${mins} min ${mode==='set'?'after sunset':'before sunrise'}.`:`Expect the colour to fade quickly ${mode==='set'?'after sunset':'before sunrise'}, as the rays drop into cloud ${far>0.6?'about '+farD+' km out':'further away'} or Earth's shadow.`);
+  void near;void nearD;
+  const sv=top.ev.sun;
+  if(sv.terrain)out.push(`From your spot the low sun drops behind the hills about ${sv.at} km away, so find a higher viewpoint to see the sun itself.`);
+  else if(sv.T>0.6)out.push(`The horizon toward the sun looks clear, so the sun itself should be visible as it ${mode==='set'?'sets':'rises'}.`);
+  else if(sv.T>0.25)out.push(`The sun may be partly hidden by cloud low on the horizon.`);
+  else out.push(`The sun itself will likely be hidden by cloud low on the horizon${sv.at?' (around '+sv.at+' km out)':''} — the show, if any, is on the clouds above.`);
+  const s=valid.map(r=>r.ev.final);if(s.length>1){const sp=Math.max(...s)-Math.min(...s);out.push(sp>30?`Models disagree a lot (${Math.min(...s)}–${Math.max(...s)}), so check satellite before heading out.`:`Models broadly agree.`)}
+  if(state.air.aod!=null&&state.air.aod>0.6)out.push(`Heavy aerosol (AOD ${state.air.aod.toFixed(2)}) may mute the colours.`);
+  return out.join(' ');
+}
+function drawMeters(k){
+  const c=state.cons,a=state.air;
+  const cv=c.avgPart(k,'canvas'),lt=c.avgPart(k,'lit'),vs=c.avgPart(k,'vis');
+  const airV=a.aod==null?null:a.aod<0.15?1:a.aod<0.3?0.8:a.aod<0.6?0.55:0.3;
+  const rows=[
+    ['Cloud canvas',cv,`Overhead: high ${Math.round(c.avgPart(k,'cH')*100)}% · mid ${Math.round(c.avgPart(k,'cM')*100)}%, plus the sky 25–50 km toward the sun. Ideal is roughly half the sky with high or mid cloud.`],
+    ['Light gets through',lt,'Share of sunlight reaching those clouds after passing low over the land toward the sun.'],
+    ['Your view',vs,`Low cloud over you: ${Math.round(c.avgPart(k,'cL')*100)}%. Fog and stratus hide everything.`],
+    ['Air clarity',airV,a.aod==null?'Aerosol data unavailable here.':`Aerosol optical depth ${a.aod.toFixed(2)}${state.hum<1?', very humid near the ground':''}. Clean air gives the most vivid colour; haze or smoke low in the atmosphere mutes it.`]];
+  $('meters').innerHTML=rows.map(([t,v,p])=>`<div class="meter"><h3>${t}</h3><div class="v">${v==null?'–':Math.round(v*100)+'%'}</div><div class="bar"><i style="width:${v==null?0:Math.round(clamp(v)*100)}%"></i></div><p>${p}</p></div>`).join('');
+}
+// seeded random
+function rng(s){return()=>{s=(s*16807)%2147483647;return s/2147483647}}
+function drawSky(k){
+  const svg=$('skysvg'),box=$('sky');
+  const W=box.clientWidth||600,H=box.clientHeight||360,c=state.cons;
+  const cH=c.avgPart(k,'cH'),cM=c.avgPart(k,'cM'),cL=c.avgPart(k,'cL'),TH=c.avgPart(k,'TH'),TM=c.avgPart(k,'TM');
+  const s=(c.score||0)/100,hz=H*0.74,r=rng(Math.round(loc.lat*1000+loc.lon*1000)+dayIdx*7+1);
+  const mix=(a,b,f)=>{const pa=a.match(/\w\w/g).map(x=>parseInt(x,16)),pb=b.match(/\w\w/g).map(x=>parseInt(x,16));return pa.map((v,i)=>Math.round(v+(pb[i]-v)*f).toString(16).padStart(2,'0')).join('')};
+  const top=mix('2b3550','3a2457',s),midc=mix('6d7486','c85a7c',s),hor=mix('a7a3a0','ffa04a',s);
+  let o=`<defs><linearGradient id="sg" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#${top}"/><stop offset=".55" stop-color="#${midc}"/><stop offset="1" stop-color="#${hor}"/></linearGradient>
+  <radialGradient id="sunh" cx=".5" cy="1" r=".6"><stop offset="0" stop-color="#ffd27a" stop-opacity="${0.35+0.5*s}"/><stop offset="1" stop-color="#ff7a45" stop-opacity="0"/></radialGradient>
+  <filter id="bl"><feGaussianBlur stdDeviation="6"/></filter><filter id="bl2"><feGaussianBlur stdDeviation="2.5"/></filter></defs>
+  <rect width="${W}" height="${H}" fill="url(#sg)"/><ellipse class="sun-pulse" cx="${W*0.62}" cy="${hz}" rx="${W*0.55}" ry="${H*0.55}" fill="url(#sunh)"/>`;
+  const lit=(f)=>mix('9aa3b8','ff6f7d',clamp(f*1.1))+'';
+  const nH=Math.round(cH*16),nM=Math.round(cM*10),nL=Math.round(cL*9);
+  for(let i=0;i<nH;i++){const y=H*(0.06+0.36*r()),x=W*(r()*1.1-0.1),w=W*(0.25+0.35*r());o+=`<path d="M${x} ${y} q ${w/2} ${-8-10*r()} ${w} ${4*r()}" stroke="#${lit(TH*s*1.3)}" stroke-width="${3+5*r()}" stroke-linecap="round" fill="none" opacity="${0.55+0.35*r()}" filter="url(#bl2)"/>`}
+  for(let i=0;i<nM;i++){const y=H*(0.3+0.3*r()),x=W*r(),w=W*(0.12+0.18*r()),h=14+18*r();o+=`<ellipse cx="${x}" cy="${y}" rx="${w}" ry="${h}" fill="#${mix('6f6a80','ff8a5c',clamp(TM*s*1.4))}" opacity=".85" filter="url(#bl)"/><ellipse cx="${x}" cy="${y+h*0.5}" rx="${w*0.9}" ry="${h*0.35}" fill="#${mix('ffcf8a','ffd9a0',.5)}" opacity="${0.5*TM*s}" filter="url(#bl2)"/>`}
+  if(state.ev&&mode)o+=`<circle cx="${W*0.62}" cy="${hz+4}" r="${Math.max(10,W*0.03)}" fill="#ffe2a8" opacity="${0.6+0.4*s}"/>`;
+  for(let i=0;i<nL;i++){const y=hz-6-26*r(),x=W*r(),w=W*(0.12+0.2*r());o+=`<ellipse cx="${x}" cy="${y}" rx="${w}" ry="${10+12*r()}" fill="#4a4b58" opacity=".9" filter="url(#bl)"/>`}
+  let p=`M0 ${H} L0 ${hz}`;for(let x=0;x<=W;x+=W/24)p+=` L${x} ${hz-8-14*Math.abs(Math.sin(x/W*7+loc.lon))-6*r()}`;p+=` L${W} ${H}Z`;
+  o+=`<path d="${p}" fill="#1b1424"/><path d="M0 ${H*0.9} Q ${W*0.3} ${H*0.84} ${W*0.55} ${H*0.9} T ${W} ${H*0.88} L${W} ${H} L0 ${H}Z" fill="#120d19"/>`;
+  svg.setAttribute('viewBox',`0 0 ${W} ${H}`);svg.innerHTML=o;
+  $('skycap').textContent=`Painted from the forecast: high ${Math.round(cH*100)}%, mid ${Math.round(cM*100)}%, low ${Math.round(cL*100)}% at the best moment`;
+}
+function curModel(){return state.valid.find(r=>r.m.id===selModel)||state.valid[0]}
+function drawCross(){
+  const svg=$('xsvg'),fig=$('xfig');const W=fig.clientWidth,H=fig.clientHeight;
+  svg.setAttribute('viewBox',`0 0 ${W} ${H}`);
+  const r=state.valid.length?curModel():null;
+  const sgn=mode==='set'?1:-1,t=state.ev+sgn*(tIdx-K0)*STEP_MS,mins=(tIdx-K0)*2.5;
+  $('tlab').textContent=`${fmtT(t)} · ${mins===0?(mode==='set'?'sunset':'sunrise'):(mins>0?'+':'−')+Math.abs(mins)+' min'}`;
+  if(!r){svg.innerHTML='';return}
+  const narrow=W<520,pl=narrow?30:44,pr=12,pt=14,pb=34,iw=W-pl-pr,ih=H-pt-pb,maxD=470,maxZ=12;
+  const X=d=>pl+d/maxD*iw,Y=z=>pt+ih-z/maxZ*ih;
+  const S=r.series,el=state.elev;
+  let o='';
+  for(let z=0;z<=12;z+=2)o+=`<line x1="${pl}" x2="${W-pr}" y1="${Y(z)}" y2="${Y(z)}" stroke="var(--line)"/><text x="${pl-6}" y="${Y(z)+4}" text-anchor="end" font-size="11" fill="var(--soft)">${z}${narrow?'':' km'}</text>`;
+  const col={L:'var(--low)',M:'var(--cloud)',H:'var(--hi)'};
+  DIST.forEach((d,i)=>{
+    const a=i===0?0:(DIST[i-1]+d)/2,b=i===DIST.length-1?d+12:(d+DIST[i+1])/2;
+    ['L','M','H'].forEach(k=>{const c=S[i][k](t);if(c==null||c<0.02)return;const [z0,z1]=LAYERS[k];
+      o+=`<rect x="${X(a)}" y="${Y(z1)}" width="${X(b)-X(a)-1}" height="${Y(z0)-Y(z1)}" rx="6" fill="${col[k]}" opacity="${(0.15+0.75*c).toFixed(2)}"><title>${d} km · ${k==='L'?'low':k==='M'?'mid':'high'} ${Math.round(c*100)}%</title></rect>`});
+  });
+  let tp=`M${X(0)} ${Y(el[0]/1000)}`;DIST.forEach((d,i)=>tp+=` L${X(d)} ${Y(el[i]/1000)}`);tp+=` L${X(maxD)} ${Y(el[el.length-1]/1000)} L${X(maxD)} ${Y(0)} L${X(0)} ${Y(0)}Z`;
+  o+=`<path d="${tp}" fill="var(--bg2)" stroke="var(--soft)" stroke-width="1"/>`;
+  const e=sunPos(t,loc.lat,loc.lon).el+0.5;
+  [[8.5,'var(--glow)','TH'],[4.5,'var(--rose)','TM']].forEach(([h,cc])=>{
+    let path='',ok=true,dd;
+    for(dd=0;dd<=maxD;dd+=5){const z=rayAlt(h,e,dd);let ter=0;for(let i=1;i<DIST.length;i++)if(dd<=DIST[i]){const f=(dd-DIST[i-1])/(DIST[i]-DIST[i-1]);ter=(el[i-1]+(el[i]-el[i-1])*f)/1000;break}
+      if(z<ter+0.15){ok=false;break} if(z>maxZ+1)break; path+=(path?' L':'M')+X(dd)+' '+Y(z)}
+    const T=transmission(S,h,e,t,el);
+    o+=`<path d="${path}" fill="none" stroke="${cc}" stroke-width="3" stroke-dasharray="${ok?'':'6 5'}" opacity="${0.35+0.65*T}"/>`;
+    o+=`<circle cx="${X(0)}" cy="${Y(h)}" r="6" fill="${cc}" opacity="${0.3+0.7*T}"/>`;
+    o+=`<text x="${X(0)+12}" y="${h>6?Y(h)-10:Y(h)+18}" font-size="12" font-weight="700" fill="${cc}">${Math.round(T*100)}% ${narrow?'':'light reaches '+h+' km'}${ok?'':' · shadowed'}</text>`;
+  });
+  [0,100,200,300,400].forEach(d=>o+=`<text x="${X(d)}" y="${H-12}" text-anchor="middle" font-size="11" fill="var(--soft)">${d===0?'You':d+(narrow?'':' km')}</text>`);
+  o+=`<text x="${W-pr}" y="${pt+12}" text-anchor="end" font-size="12" fill="var(--soft)">toward the sun · ${compass(state.az)} ${Math.round(state.az)}° →</text>`;
+  svg.innerHTML=o;
+}
+function drawGlow(){
+  const svg=$('gsvg'),fig=$('gfig');const W=fig.clientWidth,H=fig.clientHeight;svg.setAttribute('viewBox',`0 0 ${W} ${H}`);
+  const narrow=W<520,pl=34,pr=10,pt=10,pb=30,iw=W-pl-pr,ih=H-pt-pb;
+  const X=k=>pl+k/(STEPS-1)*iw,Y=v=>pt+ih-clamp(v)*ih;
+  let o='';
+  [0,.25,.5,.75,1].forEach(v=>o+=`<line x1="${pl}" x2="${W-pr}" y1="${Y(v)}" y2="${Y(v)}" stroke="var(--line)"/><text x="${pl-6}" y="${Y(v)+4}" text-anchor="end" font-size="11" fill="var(--soft)">${v*100}</text>`);
+  o+=`<line x1="${X(K0)}" x2="${X(K0)}" y1="${pt}" y2="${pt+ih}" stroke="var(--soft)" stroke-dasharray="3 4"/>`;
+  o+=`<line x1="${X(tIdx)}" x2="${X(tIdx)}" y1="${pt}" y2="${pt+ih}" stroke="var(--glow)" opacity=".5"/>`;
+  const pal=['#8ea6cf','#c792ea','#6cc5b0','#f0a23b','#b39b8a','#e88aa8','#999'];
+  const line=(cv,col,w,op)=>`<path d="${cv.map((v,k)=>(k?'L':'M')+X(k)+' '+Y(v)).join(' ')}" fill="none" stroke="${col}" stroke-width="${w}" opacity="${op}" stroke-linejoin="round"/>`;
+  const leg=[];
+  state.valid.forEach((r,i)=>{const cc=pal[MODELS.indexOf(r.m)%pal.length];o+=line(r.ev.curve.map(v=>v*state.air.f*state.hum),cc,1.6,.85);leg.push(`<span><i style="background:${cc}"></i>${r.m.name}</span>`)});
+  if(state.valid.length){o+=line(state.cons.curve,'var(--glow)',4,1);leg.unshift(`<span><i style="background:var(--glow)"></i>Consensus</span>`)}
+  [0,4,8,12,16,20].forEach(k=>{const m=(k-K0)*2.5;o+=`<text x="${X(k)}" y="${H-10}" text-anchor="middle" font-size="11" fill="var(--soft)">${m===0?(mode==='set'?'sunset':'sunrise'):(m>0?'+':'−')+Math.abs(m)+(narrow?'':' min')}</text>`});
+  svg.innerHTML=o;$('glegend').innerHTML=leg.join('')+`<span>${mode==='set'?'Minutes after sunset':'Minutes before sunrise'} →</span>`;
+}
+function drawStrip(){
+  const r=state.valid.length?curModel():null;if(!r){$('strip').innerHTML='';return}
+  const sgn=mode==='set'?1:-1,S=r.series[0],start=state.ev-sgn*3*3600000;
+  const ts=[];for(let i=0;i<=16;i++)ts.push(state.ev+(mode==='set'?(-12+i):(-4+i))*15*60000);
+  const row=(lab,k,col)=>`<div class="srow"><span>${lab}</span><div class="cells">${ts.map(t=>{const v=S[k](t);return `<i title="${fmtT(t)} · ${v==null?'n/a':Math.round(v*100)+'%'}" style="background:${col};opacity:${v==null?0.05:(0.08+0.92*v).toFixed(2)}"></i>`}).join('')}</div></div>`;
+  $('strip').innerHTML=row('High','H','var(--hi)')+row('Mid','M','var(--cloud)')+row('Low','L','var(--low)')+`<div class="saxis"><span>${fmtT(ts[0])}</span><span>${mode==='set'?'sunset':'sunrise'} ${fmtT(state.ev)}</span><span>${fmtT(ts[ts.length-1])}</span></div>`;
+  $('stripSub').textContent=`Cover above your location around ${mode==='set'?'sunset':'sunrise'}, from ${r.m.name}. Darker cells mean more cloud.`;
+  void start;
+}
+function drawTable(){
+  const p=x=>x==null?'–':Math.round(x*100)+'%';
+  const rows=state.res.map(r=>{
+    const e=r.ev,isV=state.valid.includes(r);
+    const run=(r.run?`${new Date(r.run).toISOString().slice(11,13)} UTC<div class="age">published ${ago(r.avail)} ago</div>`:'—')+(r.stale?`<div class="age">⚠ refresh failed, data from ${fmtLocal(r.stale)}</div>`:'');
+    if(!e)return `<tr class="off"><td><b>${r.m.name}</b><div class="age">${r.m.by} · ${r.m.res}</div></td><td>${run}</td><td colspan="5" style="text-align:left;white-space:normal">${r.ok?'No data for this place/day':'Failed to load: '+(r.error||'unknown')}</td></tr>`;
+    const s=isV?e.final:Math.round(e.score*state.air.f*state.hum);
+    return `<tr class="${isV?'':'off'}"><td><b>${r.m.name}</b><div class="age">${r.m.by} · ${r.m.res}${isV?'':' · not in consensus'}</div></td><td>${run}</td><td><span class="pill" style="background:${scoreCol(s)}">${s}</span></td><td>${p(e.home.H)} / ${p(e.home.M)} / ${p(e.home.L)}</td><td>${p(e.near[2])}${e.near[1]?' <span class="age">@'+e.near[1]+' km</span>':''}</td><td>${p(e.far[2])}${e.far[1]?' <span class="age">@'+e.far[1]+' km</span>':''}</td><td>${e.score>12?e.after+' min':'—'}</td></tr>`;
+  });
+  $('mtab').innerHTML=`<thead><tr><th>Model</th><th>Run</th><th>Score</th><th>Overhead H / M / L</th><th>Most cloud ≤150 km</th><th>Most cloud 200–450 km</th><th>${mode==='set'?'Afterglow':'Pre-glow'}</th></tr></thead><tbody>${rows.join('')}</tbody>`;
+}
+function drawMap(){
+  if(typeof L==='undefined'){$('map').innerHTML='<p style="padding:16px">Map library could not load.</p>';return}
+  const dark=matchMedia('(prefers-color-scheme: dark)').matches&&document.documentElement.dataset.theme!=='light';
+  if(!map){map=L.map('map',{scrollWheelZoom:false,attributionControl:true});
+    L.tileLayer(`https://{s}.basemaps.cartocdn.com/${dark?'dark_all':'light_all'}/{z}/{x}/{y}{r}.png`,{attribution:'© OpenStreetMap contributors © CARTO',maxZoom:12}).addTo(map)}
+  if(mapLayer)mapLayer.remove();
+  mapLayer=L.layerGroup().addTo(map);
+  const pts=state.pts,r=state.valid.length?curModel():null;
+  L.polyline(pts,{color:'#ff7a45',weight:3,dashArray:'6 6'}).addTo(mapLayer);
+  pts.forEach((pt,i)=>{
+    let b=null,txt='';
+    if(r){const S=r.series[i];const l=S.L(state.ev),m=S.M(state.ev),h=S.H(state.ev);b=Math.max(l??0,m??0);txt=`<br>low ${Math.round((l??0)*100)}% · mid ${Math.round((m??0)*100)}% · high ${Math.round((h??0)*100)}%`}
+    const col=i===0?'#e2557c':b==null?'#999':b>0.6?'#5d6070':b>0.3?'#b39b8a':'#ffb347';
+    L.circleMarker(pt,{radius:i===0?9:7,color:'#fff',weight:2,fillColor:col,fillOpacity:.95}).bindPopup(`<b>${i===0?loc.name:DIST[i]+' km toward the sun'}</b>${txt}`).addTo(mapLayer);
+  });
+  map.fitBounds(L.latLngBounds(pts).pad(0.15));
+  setTimeout(()=>map.invalidateSize(),50);
+}
+function drawLinks(){
+  const la=loc.lat.toFixed(2),lo=loc.lon.toFixed(2);
+  const L2=[
+   ['Windy · satellite',`https://www.windy.com/-Satellite-satellite?satellite,${la},${lo},7`,'Live satellite loop around you, every 5–10 min.'],
+   ['Windy · low clouds',`https://www.windy.com/-Low-clouds-lclouds?lclouds,${la},${lo},7`,'Forecast low-cloud layer — the fog and stratus check.'],
+   ['EUMETSAT View','https://view.eumetsat.int/','Raw Meteosat imagery incl. fog and night microphysics.'],
+   ['MeteoSwiss','https://www.meteoswiss.admin.ch/','Official forecasts, warnings and satellite for Switzerland.'],
+   ['Roundshot webcams','https://www.roundshot.com/','360° webcams — look west from a summit near you.'],
+   ['Sunsethue / Lightchance','https://sunsethue.com/','Compare against the other sunset forecasts.']];
+  $('links').innerHTML=L2.map(([t,u,d])=>`<a href="${u}" target="_blank" rel="noopener"><b>${t} ↗</b><span>${d}</span></a>`).join('');
+}
+
+// ---------- favourites, share, log ----------
+const same=(a,b)=>Math.abs(a.lat-b.lat)<1e-3&&Math.abs(a.lon-b.lon)<1e-3;
+function renderFavs(){
+  const favs=store.get('ag-favs',[]),isF=favs.some(f=>same(f,loc));
+  $('fav').textContent=isF?'★ Saved':'☆ Save place';
+  $('favs').innerHTML=favs.length>1||(favs.length&&!isF)?favs.map((f,i)=>`<button data-f="${i}" class="${same(f,loc)?'on':''}">${f.name}</button>`).join(''):'';
+}
+$('fav').addEventListener('click',()=>{let favs=store.get('ag-favs',[]);favs=favs.some(f=>same(f,loc))?favs.filter(f=>!same(f,loc)):[...favs,loc];store.set('ag-favs',favs);renderFavs()});
+$('favs').addEventListener('click',e=>{const b=e.target.closest('button[data-f]');if(!b)return;const f=store.get('ag-favs',[])[+b.dataset.f];if(f&&!same(f,loc))setLoc(f)});
+$('share').addEventListener('click',async()=>{
+  if(!state||!state.valid.length)return;
+  const c=state.cons,pk=c.curve.indexOf(Math.max(...c.curve)),sgn=mode==='set'?1:-1;
+  const txt=`${mode==='set'?'Sunset':'Sunrise'} in ${loc.name}, ${fmtD(state.ev)}: ${c.score}/100 (${words(c.score)}). ${mode==='set'?'Sunset':'Sunrise'} ${fmtT(state.ev)}, best around ${fmtT(state.ev+sgn*(pk-K0)*STEP_MS)}, look ${compass(state.az)}. ${$('story').textContent}`;
+  try{if(navigator.share){await navigator.share({title:'Afterglow',text:txt,url:location.protocol.startsWith('http')?location.href:undefined});return}}catch(e){if(e.name==='AbortError')return}
+  try{await navigator.clipboard.writeText(txt);$('share').textContent='Copied';setTimeout(()=>$('share').textContent='Share',1500)}catch(e){$('share').textContent='Could not share'}
+});
+const RATES=['Grey','Muted','Decent','Good','Spectacular'];
+const logKey=()=>`${state.days[dayIdx].s}|${mode}|${loc.lat.toFixed(2)},${loc.lon.toFixed(2)}`;
+function renderRate(){
+  const ev=state.ev,now=Date.now(),log=store.get('ag-log',[]),k=logKey(),done=log.find(x=>x.k===k);
+  if(!(now>ev+5*60000&&now<ev+20*3600000)){$('rate').innerHTML='';return}
+  $('rate').innerHTML=`<div class="rate"><p>${done?`You rated this ${mode==='set'?'sunset':'sunrise'}: ${RATES[done.r]} (forecast ${done.f}). Change it?`:`How was this ${mode==='set'?'sunset':'sunrise'} in reality?`}</p><div>${RATES.map((w,i)=>`<button data-r="${i}" class="${done&&done.r===i?'on':''}">${w}</button>`).join('')}</div></div>`;
+}
+$('rate').addEventListener('click',e=>{const b=e.target.closest('button[data-r]');if(!b)return;
+  const k=logKey();let log=store.get('ag-log',[]).filter(x=>x.k!==k);
+  log.unshift({k,d:state.days[dayIdx].s,mode,place:loc.name,f:state.cons.score,r:+b.dataset.r});store.set('ag-log',log.slice(0,200));renderRate();renderLog()});
+function renderLog(){
+  const log=store.get('ag-log',[]);$('logSec').hidden=!log.length;if(!log.length)return;
+  const cat=s=>Math.min(4,Math.floor(s/20)),hit=log.filter(x=>Math.abs(cat(x.f)-x.r)<=1).length;
+  $('logSub').textContent=`Forecast was within one category of your rating ${hit} of ${log.length} time${log.length>1?'s':''}. Stored only in this browser.`;
+  $('logTab').innerHTML=`<thead><tr><th>Date</th><th>Place</th><th>Event</th><th>Forecast</th><th>You saw</th></tr></thead><tbody>${log.slice(0,30).map(x=>`<tr><td>${x.d}</td><td>${x.place}</td><td>${x.mode==='set'?'Sunset':'Sunrise'}</td><td><span class="pill" style="background:${scoreCol(x.f)}">${x.f}</span> ${words(x.f)}</td><td>${RATES[x.r]}</td></tr>`).join('')}</tbody>`;
+}
+
+// ---------- events ----------
+$('days').addEventListener('click',e=>{const b=e.target.closest('button');if(!b)return;dayIdx=+b.dataset.i;tIdx=K0;$('tsl').value=K0;computeAll()});
+$('msel').addEventListener('change',e=>{selModel=e.target.value;drawCross();drawStrip();drawMap()});
+$('tsl').addEventListener('input',e=>{tIdx=+e.target.value;drawCross();drawGlow()});
+$('refresh').addEventListener('click',()=>load());
+function setMode(m){mode=m;store.set('ag-mode',m);$('mSet').classList.toggle('on',m==='set');$('mRise').classList.toggle('on',m==='rise');dayIdx=null;load()}
+$('mSet').addEventListener('click',()=>setMode('set'));$('mRise').addEventListener('click',()=>setMode('rise'));
+function setLoc(l){loc=l;store.set('ag-loc',l);dayIdx=null;$('res').hidden=true;$('q').value='';drawLinks();load()}
+let qT;
+$('q').addEventListener('input',e=>{clearTimeout(qT);const v=e.target.value.trim();if(v.length<2){$('res').hidden=true;return}
+  qT=setTimeout(async()=>{try{const j=await getJSON(`https://geocoding-api.open-meteo.com/v1/search?name=${encodeURIComponent(v)}&count=6&language=en`);
+    const rs=j.results||[];$('res').innerHTML=rs.length?rs.map((x,i)=>`<button data-i="${i}">${x.name}<span class="age"> · ${[x.admin1,x.country].filter(Boolean).join(', ')}</span></button>`).join(''):'<button disabled>No matches</button>';
+    $('res').hidden=false;$('res').onclick=ev=>{const b=ev.target.closest('button[data-i]');if(!b)return;const x=rs[+b.dataset.i];setLoc({name:x.name,sub:[x.admin1,x.country_code].filter(Boolean).join(', '),lat:x.latitude,lon:x.longitude})}}catch(err){}},300)});
+document.addEventListener('click',e=>{if(!e.target.closest('.search'))$('res').hidden=true});
+$('geo').addEventListener('click',()=>{if(!navigator.geolocation){$('geo').textContent='Not available';return}
+  $('geo').textContent='Locating…';
+  navigator.geolocation.getCurrentPosition(p=>{$('geo').textContent='◎ My location';setLoc({name:'My location',sub:`${p.coords.latitude.toFixed(2)}, ${p.coords.longitude.toFixed(2)}`,lat:p.coords.latitude,lon:p.coords.longitude})},
+  ()=>{$('geo').textContent='Location blocked — search instead'},{timeout:10000})});
+let rz;new ResizeObserver(()=>{clearTimeout(rz);rz=setTimeout(()=>{if(state&&state.valid&&state.valid.length){const pk=state.cons.curve.indexOf(Math.max(...state.cons.curve));drawSky(pk);drawCross();drawGlow()}},120)}).observe(document.body);
+$('mSet').classList.toggle('on',mode==='set');$('mRise').classList.toggle('on',mode==='rise');
+drawLinks();load();
+if('serviceWorker' in navigator&&location.protocol==='https:')navigator.serviceWorker.register('sw.js').catch(()=>{});
+let hiddenAt=0;document.addEventListener('visibilitychange',()=>{if(document.hidden)hiddenAt=Date.now();else if(hiddenAt&&Date.now()-hiddenAt>10*60000)load()});
+timer=setInterval(load,15*60000);
+}
+</script>
+</body>
+</html>
